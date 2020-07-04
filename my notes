@@ -1,0 +1,805 @@
+
+
+
+
+1.Download zip fie from https://www.terraform.io/downloads.html
+2.Unzip it and move it to /usr/local/bin
+3 and add path variable by below command:
+ vi ~/.bashrc
+ add below line 
+ " export PATH=$PATH:/usr/local/bin/" 
+And restart bashrc "source ~/.bashrc
+
+	4. Check terraform --help , it should show help option
+
+Run terraform as container:
+ docker pull hashicorp/terraform:latest
+
+
+
+
+
+
+
+#############################
+his low-level syntax of the Terraform language is defined in terms of a syntax called HCL, 
+
+From <https://www.terraform.io/docs/configuration/syntax.html> 
+
+
+Iaac(infrastructure as code) benefit:
+	1.  repeatability
+	2. Auditability
+	3. Change control
+	4. Collabration
+	
+	
+	
+	Terraform is:
+	Cli tool
+	Declarative IaC
+	
+	
+	
+	Terraform init: download terraform provider, and module reference available
+	
+	When terraform init is triggerd it will create .terraform/plugins/linux_amd64/
+	
+	abhishek@oc3870337827 s3_interpolation_and_dependancy]$ cd .terraform/plugins/linux_amd64/
+	[abhishek@oc3870337827 linux_amd64]$ ls
+	lock.json  terraform-provider-aws_v2.57.0_x4
+	
+	
+	The terraform init command is used to initialize a working directory containing Terraform configuration files. This is the first command that should be run after writing a new Terraform configuration or cloning an existing one from version control. It is safe to run this command multiple times.
+	
+	
+	
+	Terraform plan: compare config with state
+	Terraform plan  -out example.tfplan ---> will write plan output to example.tfplan  file
+	
+	
+	
+	
+	Two block in terraform main.tf:
+	
+	1. Terraform block-- mention required_version(optional)  ------------------> require for collabration
+
+Eg:
+
+ terraform {
+   required_version =  ">=0.12.0"
+ }
+
+
+    2. provider block ---  mention provider as aws, if are using aws provider, use secrete access and secret access key as configuration in your home directory
+
+Eg:
+
+Provider "aws" {
+ version = "~>2.0"
+  region = "us-east-1"
+
+3.Resource -- object which u want to manage, like s3 bucket,ec2 vm, k8s cluster etc
+ eg:
+
+ resource "aws_s3_bucket"  "bucket1" {
+
+}
+
+
+---  where "aws_s3_bucket" is type which is availbale by provider aws" and "bucket1" is label
+
+	4. Data sources -- same as resource but terraform is not responsible for existence for  this object
+
+
+Eg:  
+ data "aws_caller_identity" "current" {}
+ data "aws_availability_zones" "available" {
+   state = "available"
+
+
+	4. Output : save the value of terraform state
+	    to retrive value from data resource we have to use below format
+	   data.<type>.lebel
+	
+	Eg:   for above data 
+	  output "aws_caller_info" {
+	     value = "data.aws_caller_identity.current"
+	  output "aws_availability_zones" {
+	     value = "data.aws_availability_zones.available"
+	
+	
+	
+	Output For resource is type.lebel
+	Eg . Output for    resource "aws_s3_bucket
+	 output "bucket_info" {
+	  value = "aws_s3_bucket.bucket1"
+	
+	
+	
+	
+	Next use above information for practical in next session
+	
+	#######################################################
+	Configure aws credential as env in terraform:
+	
+	Vi ~/.basrc and put below entry:
+	
+	 export AWS_ACCESS_KEY_ID="xxx"
+	 export AWS_SECRET_ACCESS_KEY="xxx"
+	 export AWS_DEFAULT_REGION="ap-south-1"
+	
+	
+	And do source ~/.basrc
+	
+	
+	
+	##########variable interpolation########
+	
+	resource "aws_s3_bucket" "bucket2" {
+	 bucket = "${data.aws_caller_identity.current.account_id}-bucket2"
+	}
+	  
+	
+	Eg:
+	
+	terraform {
+	required_version = ">=0.12.23"
+	}
+	provider "aws" {
+	 version = "~>2.0"
+	 }
+	resource "aws_s3_bucket" "bucket2" {
+	 bucket = "${data.aws_caller_identity.current.account_id}-bucket2"     #### "${}"  variable interpolation
+	}
+	data "aws_caller_identity" "current" {
+	}
+	data "aws_availability_zones" "available" {
+	 state = "available"
+	}
+	output "bucket_info" {
+	 value = "aws_s3_bucket.bucket1.bucket"
+	}
+	output "aws_caller_info" {
+	 value = "data.aws_caller_identity.current"
+	 }
+	output "aws_availability_zones" {
+	 value = "data.aws_availability_zones.available"
+	 }
+	
+	
+	
+	############################dependancy##########
+	Two type of dependancy 
+	1. Implicit
+	2. Explicit
+	
+	
+	Next depenadnacy  handson
+	
+	 terraform graph >graph.dot   used to create graph in json format 
+	
+	Graphviz tool for showing dependancy by graph
+	
+	
+	
+	
+	
+	
+	#########variable in terraform#####
+	
+	We can provide variable in cli  by using  -var <key> <value>   or by file(file name .tfvars or .auto.tfvars)
+	
+	Variable in terraform "to provide input"
+	
+	######env variable: TF_VAR_bucket_name####
+	variable "bucket_name" {
+	  type = string
+	}
+	
+	
+	And using variable:
+	
+	resource "aws_s3_bucket" "bucket1" {
+	   bucket = var.bucket_name    ##########using variable bucket_name
+	
+	}
+	
+	
+######################LOCAL 
+Multiple local we can use 
+Local values allow you to assign a name to expression ,local can make your code more readable
+
+############locals #########
+
+locals {
+
+ aws_account = "${data.aws_caller_identity.current.account_id}-${lower(data.aws_caller_identity.current.user_id)}"
+
+}
+
+Used local:
+
+resource "aws_s3_bucket" "bucket3" {
+ bucket = "${local.aws_account}-bucket3"
+}
+
+
+
+#######################################COUNT
+Very useful to create muliple resource
+
+resource "aws_s3_bucket" "bucketx" {
+ count=2
+ bucket = "${local.aws_account}-bucket${count.index+3}"
+ 
+Output:
+ aws_s3_bucket.bucketx[0] will be created
+  + resource "aws_s3_bucket" "bucketx" {
+L̥            + bucket                      = "116406743224-aidarwgtb6c4pttourqx6-bucket3"
+
+ # aws_s3_bucket.bucketx[1] will be created
+  + resource "aws_s3_bucket" "bucketx" {
+          + bucket                      = "116406743224-aidarwgtb6c4pttourqx6-bucket4"
+
+
+
+If u want to delete  then put  count= 0
+
+
+###################for_each use case
+ if u create bucket by using count it will use [0] or [1]  with name of bucket( aws_s3_bucket.bucketx[0] )  but using for_each we can give name as well 
+
+
+
+locals {
+
+ bucket = {
+  bucket101 = "mybucket101"
+  bucket102 = "mybucket102"
+}
+
+}
+
+locals {
+
+ aws_account = "${data.aws_caller_identity.current.account_id}-${lower(data.aws_caller_identity.current.user_id)}"
+
+}
+
+resource "aws_s3_bucket" "bucketE" {
+
+ for_each=local.bucket
+ bucket="${local.aws_account}-${each.value}"
+}
+
+
+
+
+# aws_s3_bucket.bucketE["bucket101"] will be created
+  + resource "aws_s3_bucket" "bucketE" {
+      + acceleration_status         = (known after apply)
+      + acl                         = "private"
+      + arn                         = (known after apply)
+      + bucket                      = "116406743224-aidarwgtb6c4pttourqx6-mybucket101"
+      + bucket_domain_name          = (known after apply)
+
+
+
+ # aws_s3_bucket.bucketE["bucket102"] will be created
+  + resource "aws_s3_bucket" "bucketE" {
+      + acceleration_status         = (known after apply)
+      + acl                         = "private"
+      + arn                         = (known after apply)
+      + bucket                      = "116406743224-aidarwgtb6c4pttourqx6-mybucket102"
+
+
+
+
+Another method when key and value are same (when in local instead of key value if it is list)
+
+Eg:
+
+locals {
+
+ bucket = [
+  "mybucket101",
+ "mybucket102"
+]
+
+}
+
+resource "aws_s3_bucket" "bucketE" {
+
+ for_each=toset(local.bucket)
+ bucket="${local.aws_account}-${each.key}"
+}
+
+
+Output:
+
+ # aws_s3_bucket.bucketE["mybucket101"] will be created
+  + resource "aws_s3_bucket" "bucketE" {
+            + bucket                      = "116406743224-aidarwgtb6c4pttourqx6-mybucket101"
+
+ # aws_s3_bucket.bucketE["mybucket102"] will be created
+  + resource "aws_s3_bucket" "bucketE" {
+      + bucket                      = "116406743224-aidarwgtb6c4pttourqx6-mybucket102"
+
+
+
+
+
+Conditional statement:
+Number_of_bucket=var.bucket_count>0 ? Var.bucket_count:local.minimum_number
+                                   < if statement --------> ? <-true condition>: <false condition>
+
+
+
+
+
+###############Function###########
+100 builtin feature
+locals { 
+ts=timestamp()  ---return date and time
+
+Functionname(arg1,arg2)
+
+Current_month = formatdate("MMMM",local.ts)
+Tomorrow = formatdate("DD", timeadd(local.ts,"24"))
+}
+
+min()
+max()
+lower()
+upper()
+trimspace()  -------delte whitespace from beginning and from last
+Format()
+Formatlist()
+
+
+##############LISt comprehensive and iteration #####################
+
+ locals {
+
+ l= ["one","two","three"]
+
+ Upper_list = [ for item in local.l: upper(item)   ]
+
+Upper_dictonary = { for item in local.l: item =>upper(item)}
+
+
+
+Filtering:
+
+locals {
+N = [0,1,2,3,4,5]
+Even= [for I in locals.N: i if i%2==0]
+
+
+##################  heredoc
+
+Output "heredoc" {
+ value =  <<-EOT  bla nla  nana
+ nnaammamaamam 
+
+
+EOT
+}
+
+
+
+
+###############
+
+Terraform state list
+Terraform state show  <resource_name>
+
+###################
+Destroy all from aws;
+
+Terraform destroy
+
+###############
+Here docs:
+
+Output "heredoc" {
+Value = <<-EOT
+ this is heredoc for documentation, will span multiple line
+
+This is useful for documentation
+EOT
+}
+
+
+
+Directive:  interpolation , looks like 
+
+Output "directive"  {
+Value = <<-EOT
+This is heredocs with directive .
+%{ if local.person_name =="" }  -------------------> logical statement with %
+Sorry I don’t know your name
+%{ else}
+Hi  ${local.person_name}
+%{ endif }
+EOT
+}
+
+
+Output "iterated" {
+Value = <<-EOT
+Directive can also iterative.
+%{for number in local.evens}
+${number} is even
+%{ endfor }
+
+EOT
+}
+
+
+
+Terraform module:
+ re-useable and DRY code ( don’t repeat yourself)
+
+
+Terraform registry: registry.terraform.io
+
+Create module:
+	1. Create directory
+	2. Put code
+	
+	
+Module name convention when publishing to private or public registry:
+Terraform-<PROVIDERNAME>-<NAME>
+
+Module layout
+
+Terraform-PROVIDERNAME-NAME
+|- README.md
+|-LICENCE
+|-main.tf
+|-variable.tf
+|-output.tf
+|-modules /
+|--README.md
+|--LICENCE
+|--main.tf
+|-- -
+|-example
+|--example_1/
+|---main.tf
+|-script
+|--datasource.py
+|--resource.py
+
+
+
+
+Like the root module:
+
+Variable to paass parameter
+Output to return  value
+
+Unlike the root module:
+Variables without default values are required .TF will not promt
+Outputs are not printed to the console or persisted in the state
+
+
+Module syntax:
+
+
+##local file
+Module  "local-module" {
+  source = "\path to module"
+
+}
+# terraform registry
+Module  "published-module"  {
+  source = " rajopolisg/ lambda-python-archiev"
+
+}
+#  from github
+
+ module "scm-module" {
+   source = "github.com/abhishek-tyagi87"
+
+
+######################## terraform backened
+
+When multiple team works or team collabaration , then terraform provides backend provider  and optinally lock option so terraform statefile can be stored remotely and by using lock any one user can only edit  terraform statefile at a time
+ 
+Eg: s3 is terraform provider for backened, there are other provider as well.  This backened we have to define in terraform block
+Need to do terraform init
+
+Remote   is another backened provided by terraform and in this we can do remote plan and apply, ruunung in terraform cloud
+
+##s3 backened(not provide remote plan and apply)
+ terraform {
+   required_version =  ">=0.12.0"
+   backened  "s3"  {
+      bucket =  "abhishek-tyagi"
+      key = "abhishek-tyagi-ject "
+      region = ""
+     dynamodb_table = "abhishek-terraform-lock"        #########for locking
+
+}
+ }
+
+## remote backened
+
+ terraform {
+   required_version =  ">=0.12.0"
+   backened  "remote"  {
+      hostname =  "abhishek-tyagi"
+      organization = "abhishek-tyagi-ject "
+      workspace {
+           name =  "collabartion"      #########provided by default locking
+                         }
+                                         }
+                 }
+
+##############local and remote exec
+
+Local-exec:   The local-exec provisioner invokes a local executable after a resource is created. This invokes a process on the machine running Terraform, not on the resource. See the remote-exec provisioner to run commands on the 
+resource.
+
+
+Eg:  
+
+resource "aws_instance" "web" {
+  # ...
+
+  provisioner "local-exec" {
+    command = "echo ${aws_instance.web.private_ip} >> private_ips.txt"
+  }
+}
+
+Argument:
+command - (Required) 
+working_dir - (Optional)
+interpreter - (Optional) 
+environment - (Optional)
+
+Eg:
+
+resource "null_resource" "example1" {
+  provisioner "local-exec" {
+    command = "open WFH, '>completed.txt' and print WFH scalar localtime"
+    interpreter = ["perl", "-e"]
+  }
+}
+resource "null_resource" "example2" {
+  provisioner "local-exec" {
+    command = "Get-Date > completed.txt"
+    interpreter = ["PowerShell", "-Command"]
+  }
+}
+resource "aws_instance" "web" {
+  # ...
+
+  provisioner "local-exec" {
+    command = "echo $FOO $BAR $BAZ >> env_vars.txt"
+
+    environment = {
+      FOO = "bar"
+      BAR = 1
+      BAZ = "true"
+    }
+  }
+}
+
+#############################################  remote-exec
+
+Remote -exec:  The remote-exec provisioner invokes a script on a remote resource after it is created. This can be used to run a configuration management tool, bootstrap into a cluster, etc.
+
+
+Eg:
+
+resource "aws_instance" "web" {
+  # ...
+
+  provisioner "remote-exec" {
+    inline = [
+      "puppet apply",
+      "consul join ${aws_instance.web.private_ip}",
+    ]
+  }
+}
+
+
+Argument Reference:
+
+inline - This is a list of command strings. They are executed in the order they are provided. This cannot be provided with script or scripts.
+
+script - This is a path (relative or absolute) to a local script that will be copied to the remote resource and then executed. This cannot be provided with inline or scripts.
+
+scripts - This is a list of paths (relative or absolute) to local scripts that will be copied to the remote resource and then executed. They are executed in the order they are provided. This cannot be provided with inline or script.
+
+
+Script Arguments:
+
+You cannot pass any arguments to scripts using the script or scripts arguments to this provisioner. If you want to specify arguments, upload the script with the file provisioner and then use inline to call it. 
+Example:
+
+resource "aws_instance" "web" {
+  # ...
+
+  provisioner "file" {
+    source      = "script.sh"
+    destination = "/tmp/script.sh"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "chmod +x /tmp/script.sh",
+      "/tmp/script.sh args",
+    ]
+  }
+}
+
+Expressions in provisioner blocks cannot refer to their parent resource by name. Instead, they can use the special self object.
+
+The self object represents the provisioner's parent resource, and has all of that resource's attributes. For example, use self.public_ip to reference an aws_instance's public_ip attribute
+
+
+Creation-Time Provisioners:
+
+By default, provisioners run when the resource they are defined within is created. Creation-time provisioners are only run during creation, not during updating or any other lifecycle. They are meant as a means to perform bootstrapping of a system.
+
+If a creation-time provisioner fails, the resource is marked as tainted. A tainted resource will be planned for destruction and recreation upon the next terraform apply
+
+
+You can change this behavior by setting the on_failure attribute,
+
+
+Destroy-Time Provisioners:
+
+If when = "destroy" is specified, the provisioner will run when the resource it is defined within is destroyed.
+
+resource "aws_instance" "web" {
+  # ...
+
+  provisioner "local-exec" {
+    when    = "destroy"
+    command = "echo 'Destroy-time provisioner'"
+  }
+}
+
+
+Destroy provisioners are run before the resource is destroyed. If they fail, Terraform will error and rerun the provisioners again on the next terraform apply. Due to this behavior, care should be taken for destroy provisioners to be safe to run multiple times
+
+Destroy-time provisioners can only run if they remain in the configuration at the time a resource is destroyed. If a resource block with a destroy-time provisioner is removed entirely from the configuration, its provisioner configurations are removed along with it and thus the destroy provisioner won't run. To work around this, a multi-step process can be used to safely remove a resource with a destroy-time provisioner:
+
+Update the resource configuration to include count = 0.
+Apply the configuration to destroy any existing instances of the resource, including running the destroy provisioner.
+Remove the resource block entirely from configuration, along with its provisioner blocks.
+Apply again, at which point no further action should be taken since the resources were already destroyed.
+This limitation may be addressed in future versions of Terraform. For now, destroy-time provisioners must be used sparingly and with care.
+
+
+Multiple Provisioners:
+
+Can use multiple provisioner
+
+resource "aws_instance" "web" {
+  # ...
+
+  provisioner "local-exec" {
+    command = "echo first"
+  }
+
+  provisioner "local-exec" {
+    command = "echo second"
+  }
+}
+
+
+Failure Behavior:
+
+
+By default, provisioners that fail will also cause the Terraform apply itself to fail. The on_failure setting can be used to change this. The allowed values are:
+
+"continue" - Ignore the error and continue with creation or destruction.
+
+"fail" - Raise an error and stop applying (the default behavior). If this is a creation provisioner, taint the resource.
+
+Example:
+
+resource "aws_instance" "web" {
+  # ...
+
+  provisioner "local-exec" {
+    command    = "echo The server's IP address is ${self.private_ip}"
+    on_failure = "continue"
+  }
+}
+
+##############
+
+terraform exam:
+
+provider (how to configure provider version,terraform version)
+terraform setting(~> operator)
+style convention
+
+module (input/output ,how to call child ,how to get output from one module,module composition),how much lavel of nesting in module : 1, source of module, in github repo can be tag to module ?
+perpose of terraform state(import existing resource, locking,sensitive data,), delete something from state,terraform state command
+provisionar(local and remote)
+
+command section:console, fmt, taint(mark that resouce and will delete next apply),validate(what is different btw validate and apply), refresh
+
+workspaces:how to select, create ,
+debugging: how to set log(tf_log env variable need to set), how to handle terraform env variable
+
+core terraform workflow
+how terraform interact with vault,how secretes can be stored,using terraform valut state will be stored or not ?
+
+no need to know much  terraform enterpize(basic things only)( 6 to 7 question from enterpize and terraform cloud)
+terraform cloud: how does terraform cloud operate,how do you authenticate using api token where do you mention api token in terraform cli file ?, how does workspace different in terraform clouad and opensource terraform, concept of remote trunk, how it will be intergare with vcs,
+concept of internal private module registry
+remote backend
+how to do alias of providers
+workspace: config and backend will be same only statefile will be different
+
+
+ create new workspace:
+
+$ terraform workspace new bar
+Created and switched to workspace "bar"!
+
+You're now on a new, empty workspace. Workspaces isolate their state,
+so if you run "terraform plan" Terraform will not see any existing state
+for this configuration.
+
+to switch workspaces you can use terraform workspace select
+
+
+#############destroy terraform resources
+
+Terraform destroy -target aws_instance.testec2
+Terraform destroy -target <instance name>
+
+Or can be destroyed by commented in .tf file
+Eg:
+
+provider "aws" {
+    region     = "us-east-2"
+    access_key = "xxxx"
+    secret_key = "xxxx"
+   }
+
+/* 
+  
+  resource "aws_instance" "testec2" {
+      ami = "ami-0a54aef4ef3b5f881"
+      instance_type = "t2.micro"
+ 
+  }
+*/
+
+##################### fetch current state of resource
+Terraform refresh
+
+
+############## show terraform state file content##
+Terraform show
+
+
+#########operator for aws provider version######
+
+provider "aws" {
+  region     = "us-east-2"
+  access_key = "xxx"
+  secret_key = "xxx"
+  version = ">=2.5,<=2.6"   ---------> grater than and equalto  2.5 and  less than eqal to 2.6
+}
+
+version = "~>2.0"   --------->any version in 2.x    
+
+
+############  configure third party provider which is not certified ny hashocorp
+Put executable plugin in  ~/terraform.d/plugins/
+#######################
+
+Attribute reference we can use in output block
